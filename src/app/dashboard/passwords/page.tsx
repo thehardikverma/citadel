@@ -12,7 +12,8 @@ import {
 
 export default function PasswordsPage() {
   const { masterPassword } = useVault();
-  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);

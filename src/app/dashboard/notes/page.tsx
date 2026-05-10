@@ -4,16 +4,22 @@ import { useState, useEffect } from 'react';
 import { useVault } from '@/contexts/VaultContext';
 import { createClient } from '@/lib/supabase/client';
 import { encryptData, decryptData } from '@/lib/crypto';
-import { FileText, Plus, Search, Trash2, Edit3, X, Save } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { FileText, Plus, Search, Trash2, Edit3, X, Save, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input, Textarea } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 
 export default function NotesPage() {
   const { masterPassword } = useVault();
-  const [notes, setNotes] = useState<Record<string, unknown>[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  
-  // Editor state
-  const [activeNote, setActiveNote] = useState<Record<string, unknown> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [activeNote, setActiveNote] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -23,221 +29,161 @@ export default function NotesPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data } = await supabase
-      .from('vault_items')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('type', 'note')
+    const { data } = await supabase.from('vault_items').select('*')
+      .eq('user_id', user.id).eq('type', 'note')
       .order('updated_at', { ascending: false });
 
     if (data) {
-      const decryptedNotes = await Promise.all(data.map(async (item) => {
+      const dec = await Promise.all(data.map(async (item) => {
         try {
           const content = await decryptData(item.encrypted_data, item.iv, item.salt, masterPassword!);
           return { ...item, content };
-        } catch (err) {
-          console.error('Failed to decrypt note', item.id);
+        } catch {
           return { ...item, error: true, content: 'Error decrypting note.' };
         }
       }));
-      setNotes(decryptedNotes);
+      setNotes(dec);
     }
     setLoading(false);
   };
 
-  useEffect(() => {
-    if (masterPassword) loadNotes();
-  }, [masterPassword]);
+  useEffect(() => { if (masterPassword) loadNotes(); }, [masterPassword]);
 
   const handleSave = async () => {
-    if (!masterPassword || !editTitle || !editContent) return;
-
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { ciphertext, iv, salt } = await encryptData(editContent, masterPassword);
-
-    if (activeNote?.id) {
-      // Update
-      const { error } = await supabase.from('vault_items').update({
-        title: editTitle,
-        encrypted_data: ciphertext,
-        iv,
-        salt,
-        updated_at: new Date().toISOString()
-      }).eq('id', activeNote.id);
-
-      if (!error) {
-        setNotes(notes.map(n => n.id === activeNote.id ? { ...n, title: editTitle, content: editContent, updated_at: new Date().toISOString() } : n));
-      }
-    } else {
-      // Insert
-      const { data, error } = await supabase.from('vault_items').insert({
-        user_id: user.id,
-        type: 'note',
-        title: editTitle,
-        encrypted_data: ciphertext,
-        iv,
-        salt,
-      }).select().single();
-
-      if (!error && data) {
-        setNotes([{ ...data, content: editContent }, ...notes]);
-      }
+    if (!masterPassword || !editTitle.trim()) {
+      toast.error('Title is required');
+      return;
     }
+    setSaving(true);
 
-    setIsEditing(false);
-    setActiveNote(null);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { ciphertext, iv, salt } = await encryptData(editContent || ' ', masterPassword);
+
+      if (activeNote?.id) {
+        const { error } = await supabase.from('vault_items').update({
+          title: editTitle, encrypted_data: ciphertext, iv, salt,
+          updated_at: new Date().toISOString()
+        }).eq('id', activeNote.id);
+        if (error) throw error;
+        setNotes(notes.map(n => n.id === activeNote.id ? { ...n, title: editTitle, content: editContent, updated_at: new Date().toISOString() } : n));
+        toast.success('Note updated');
+      } else {
+        const { data, error } = await supabase.from('vault_items').insert({
+          user_id: user.id, type: 'note', title: editTitle,
+          encrypted_data: ciphertext, iv, salt,
+        }).select().single();
+        if (error) throw error;
+        if (data) {
+          await supabase.from('activity_log').insert({ user_id: user.id, action: 'Created note', item_type: 'note', item_title: editTitle });
+          setNotes([{ ...data, content: editContent }, ...notes]);
+          setActiveNote({ ...data, content: editContent });
+          toast.success('Note created');
+        }
+      }
+      setIsEditing(false);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save note');
+    }
+    setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this secure note?')) return;
-    
+    if (!confirm('Delete this note?')) return;
     const supabase = createClient();
     await supabase.from('vault_items').delete().eq('id', id);
     setNotes(notes.filter(n => n.id !== id));
-    if (activeNote?.id === id) {
-      setIsEditing(false);
-      setActiveNote(null);
-    }
+    if (activeNote?.id === id) { setIsEditing(false); setActiveNote(null); }
+    toast.success('Note deleted');
   };
 
-  const filteredNotes = notes.filter(n => 
-    n.title.toLowerCase().includes(search.toLowerCase()) || 
+  const filteredNotes = notes.filter(n =>
+    n.title.toLowerCase().includes(search.toLowerCase()) ||
     (!n.error && n.content.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 108px)', gap: '24px' }}>
-      
-      {/* Sidebar List */}
-      <div style={{ width: '320px', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Secure Notes</h2>
-          <button 
-            onClick={() => { setActiveNote(null); setEditTitle(''); setEditContent(''); setIsEditing(true); }}
-            className="btn-primary" style={{ padding: '6px 12px' }}
-          >
-            <Plus size={14} /> New
-          </button>
+    <div className="flex h-[calc(100vh-108px)] gap-5">
+      {/* Sidebar */}
+      <div className="w-72 flex flex-col gap-3 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold">Notes</h2>
+          <Button size="sm" onClick={() => { setActiveNote(null); setEditTitle(''); setEditContent(''); setIsEditing(true); }}>
+            <Plus size={13} /> New
+          </Button>
         </div>
-
-        <div style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input 
-            type="text" 
-            placeholder="Search notes..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="input-base"
-            style={{ paddingLeft: '34px', fontSize: '13px' }}
-          />
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <Input placeholder="Search notes..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-xs" />
         </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="flex-1 overflow-y-auto flex flex-col gap-1.5">
           {loading ? (
-            <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius)' }} />
+            Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)
           ) : filteredNotes.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
-              No notes found
-            </div>
+            <p className="text-xs text-text-muted text-center py-8">No notes found</p>
           ) : (
             filteredNotes.map((note) => (
-              <button
+              <motion.button
                 key={note.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 onClick={() => { setActiveNote(note); setIsEditing(false); setEditTitle(note.title); setEditContent(note.content); }}
-                style={{
-                  padding: '16px',
-                  background: activeNote?.id === note.id ? 'var(--accent-glow)' : 'var(--bg-secondary)',
-                  border: `1px solid ${activeNote?.id === note.id ? 'rgba(99,102,241,0.3)' : 'var(--border-primary)'}`,
-                  borderRadius: 'var(--radius)',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                }}
+                className={`text-left p-3 rounded-lg border transition-all cursor-pointer ${
+                  activeNote?.id === note.id
+                    ? 'border-accent/30 bg-accent/5'
+                    : 'border-border-primary bg-bg-card hover:bg-bg-hover hover:border-border-secondary'
+                }`}
               >
-                <div style={{ fontWeight: 600, fontSize: '14px', color: activeNote?.id === note.id ? 'var(--accent-secondary)' : 'var(--text-primary)' }}>
-                  {note.title}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {note.error ? 'Encrypted content' : note.content}
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  {new Date(note.updated_at).toLocaleDateString()}
-                </div>
-              </button>
+                <p className="text-sm font-medium truncate">{note.title}</p>
+                <p className="text-[11px] text-text-muted truncate mt-0.5">{note.error ? 'Encrypted' : note.content}</p>
+                <p className="text-[9px] text-text-muted mt-1">{new Date(note.updated_at).toLocaleDateString()}</p>
+              </motion.button>
             ))
           )}
         </div>
       </div>
 
-      {/* Editor Area */}
-      <div style={{ 
-        flex: 1, 
-        background: 'var(--bg-secondary)', 
-        border: '1px solid var(--border-primary)', 
-        borderRadius: 'var(--radius-xl)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
-      }}>
+      {/* Editor */}
+      <div className="flex-1 rounded-xl border border-border-primary bg-bg-card flex flex-col overflow-hidden">
         {!activeNote && !isEditing ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-            <FileText size={48} style={{ opacity: 0.2, marginBottom: '16px' }} />
-            <p>Select a note to view or create a new one.</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-text-muted">
+            <FileText size={40} className="opacity-20 mb-3" />
+            <p className="text-sm">Select or create a note</p>
           </div>
         ) : (
           <>
-            {/* Editor Toolbar */}
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="px-5 py-3 border-b border-border-primary flex items-center justify-between">
               {isEditing ? (
-                <input 
-                  type="text" 
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="Note Title"
-                  style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', width: '60%' }}
-                />
+                <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Note Title"
+                  className="bg-transparent border-none outline-none text-lg font-semibold w-[60%] text-text-primary placeholder:text-text-muted" />
               ) : (
-                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>{activeNote.title}</h2>
+                <h2 className="text-lg font-semibold truncate">{activeNote?.title}</h2>
               )}
-
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div className="flex gap-2">
                 {isEditing ? (
                   <>
-                    <button onClick={() => { setIsEditing(false); if (!activeNote) setActiveNote(null); }} className="btn-ghost" style={{ padding: '8px' }}><X size={16} /></button>
-                    <button onClick={handleSave} className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }}><Save size={14} /> Save</button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => { setIsEditing(false); if (!activeNote) setActiveNote(null); }}><X size={14} /></Button>
+                    <Button size="sm" onClick={handleSave} disabled={saving}>
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
+                    </Button>
                   </>
                 ) : (
                   <>
-                    <button onClick={() => setIsEditing(true)} className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }}><Edit3 size={14} /> Edit</button>
-                    <button onClick={() => handleDelete(activeNote.id)} className="btn-ghost" style={{ padding: '8px', color: 'var(--danger)' }}><Trash2 size={16} /></button>
+                    <Button variant="secondary" size="sm" onClick={() => setIsEditing(true)}><Edit3 size={13} /> Edit</Button>
+                    <Button variant="ghost" size="icon-sm" className="text-danger/70 hover:text-danger" onClick={() => handleDelete(activeNote.id)}><Trash2 size={14} /></Button>
                   </>
                 )}
               </div>
             </div>
-
-            {/* Editor Content */}
-            <div style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
+            <div className="flex-1 p-5 overflow-auto">
               {isEditing ? (
-                <textarea 
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  placeholder="Write your secure note here. Supports Markdown..."
-                  style={{ 
-                    width: '100%', height: '100%', resize: 'none', background: 'transparent', 
-                    border: 'none', outline: 'none', color: 'var(--text-primary)', 
-                    fontSize: '15px', lineHeight: 1.6, fontFamily: 'var(--font-sans)'
-                  }}
-                />
+                <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} placeholder="Write your note here..."
+                  className="w-full h-full min-h-[300px] text-[15px] leading-relaxed border-none bg-transparent focus:ring-0 resize-none" />
               ) : (
-                <div style={{ fontSize: '15px', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                  {activeNote.content}
-                </div>
+                <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{activeNote?.content}</div>
               )}
             </div>
           </>

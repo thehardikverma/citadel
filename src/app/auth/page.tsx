@@ -1,193 +1,170 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Shield, Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, Mail, Lock, ArrowLeft, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 export default function AuthPage() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    setSuccess('');
 
     const supabase = createClient();
 
-    if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({ email, password });
+    if (isSignUp) {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
       if (error) {
-        setError(error.message);
+        toast.error(error.message);
       } else {
-        setSuccess('Check your email for a confirmation link!');
+        toast.success('Check your email for a confirmation link!');
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setError(error.message);
+        toast.error(error.message);
       } else {
+        toast.success('Signed in successfully');
         router.push('/dashboard');
       }
     }
-
     setLoading(false);
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'radial-gradient(ellipse at top, rgba(99,102,241,0.06) 0%, var(--bg-primary) 60%)',
-      padding: '24px',
-    }}>
-      <div className="animate-scale-in" style={{
-        width: '100%',
-        maxWidth: '420px',
-      }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-          <div style={{
-            width: '52px',
-            height: '52px',
-            borderRadius: '14px',
-            background: 'linear-gradient(135deg, var(--accent-primary), #8b5cf6)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '16px',
-            boxShadow: '0 0 30px rgba(99,102,241,0.3)',
-          }}>
-            <Shield size={24} color="white" />
+    <div className="min-h-screen flex bg-bg-primary">
+      {/* Left branding panel */}
+      <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.08)_0%,transparent_60%)]" />
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.02) 1px, transparent 0)',
+          backgroundSize: '32px 32px',
+        }} />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8 }}
+          className="relative z-10 text-center px-12"
+        >
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent to-accent-cyan flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-accent/20">
+            <Shield size={40} className="text-white" />
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700 }}>
-            {mode === 'login' ? 'Welcome back' : 'Create your vault'}
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '6px' }}>
-            {mode === 'login'
-              ? 'Sign in to access your encrypted vault'
-              : 'Set up your secure personal vault'}
+          <h2 className="text-4xl font-bold tracking-tight mb-4">Citadel</h2>
+          <p className="text-text-secondary text-lg leading-relaxed max-w-sm mx-auto">
+            Your zero-knowledge encrypted fortress for everything private.
           </p>
-        </div>
+          <div className="mt-8 flex gap-3 justify-center">
+            {['AES-256', 'Zero-Knowledge', 'AI-Powered'].map((tag) => (
+              <span key={tag} className="px-3 py-1 rounded-full bg-bg-elevated border border-border-primary text-xs text-text-muted">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-primary)',
-          borderRadius: 'var(--radius-xl)',
-          padding: '28px',
-        }}>
-          {/* Email */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-              Email
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className="input-base"
-                style={{ paddingLeft: '38px' }}
-              />
+      {/* Right form panel */}
+      <div className="flex-1 flex items-center justify-center p-6">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-sm"
+        >
+          <button
+            onClick={() => router.push('/')}
+            className="flex items-center gap-2 text-sm text-text-muted hover:text-text-primary mb-8 transition-colors cursor-pointer"
+          >
+            <ArrowLeft size={14} /> Back
+          </button>
+
+          <div className="lg:hidden flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent-cyan flex items-center justify-center">
+              <Shield size={20} className="text-white" />
             </div>
+            <span className="text-xl font-bold">Citadel</span>
           </div>
 
-          {/* Password */}
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-              Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-                className="input-base"
-                style={{ paddingLeft: '38px', paddingRight: '42px' }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
-                  padding: '4px',
-                }}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={isSignUp ? 'signup' : 'signin'}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <h1 className="text-2xl font-bold mb-1">
+                {isSignUp ? 'Create your vault' : 'Welcome back'}
+              </h1>
+              <p className="text-sm text-text-muted mb-8">
+                {isSignUp ? 'Start securing your digital life' : 'Enter your credentials to unlock'}
+              </p>
 
-          {/* Error / Success */}
-          {error && (
-            <div style={{
-              padding: '10px 14px', borderRadius: 'var(--radius)', marginBottom: '16px',
-              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
-              color: 'var(--danger)', fontSize: '13px',
-            }}>
-              {error}
-            </div>
-          )}
-          {success && (
-            <div style={{
-              padding: '10px 14px', borderRadius: 'var(--radius)', marginBottom: '16px',
-              background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)',
-              color: 'var(--success)', fontSize: '13px',
-            }}>
-              {success}
-            </div>
-          )}
+              <form onSubmit={handleAuth} className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary mb-1.5">Email</label>
+                  <div className="relative">
+                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                    <Input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
 
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary"
-            style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius)', fontSize: '14px' }}
-          >
-            {loading ? (
-              <span>Loading...</span>
-            ) : (
-              <>
-                {mode === 'login' ? 'Sign In' : 'Create Account'}
-                <ArrowRight size={16} />
-              </>
-            )}
-          </button>
-        </form>
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary mb-1.5">Password</label>
+                  <div className="relative">
+                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                    <Input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="pl-9"
+                      minLength={6}
+                    />
+                  </div>
+                </div>
 
-        {/* Toggle */}
-        <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '13px', color: 'var(--text-muted)' }}>
-          {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-          <button
-            onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setSuccess(''); }}
-            style={{
-              background: 'none', border: 'none', color: 'var(--accent-secondary)',
-              cursor: 'pointer', fontWeight: 500, fontSize: '13px',
-            }}
-          >
-            {mode === 'login' ? 'Sign Up' : 'Sign In'}
-          </button>
-        </p>
+                <Button type="submit" disabled={loading} className="mt-2">
+                  {loading && <Loader2 size={16} className="animate-spin" />}
+                  {isSignUp ? 'Create Account' : 'Sign In'}
+                </Button>
+              </form>
+
+              <p className="text-center text-sm text-text-muted mt-6">
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                <button
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-accent hover:text-accent-hover font-medium cursor-pointer"
+                >
+                  {isSignUp ? 'Sign In' : 'Create one'}
+                </button>
+              </p>
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
       </div>
     </div>
   );

@@ -1,185 +1,132 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Lock, FileText, Key, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Shield, Lock, FileText, Key, Sparkles, ArrowRight, Zap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+const features = [
+  { icon: Lock, label: 'AES-256-GCM Encryption', desc: 'Military-grade, zero-knowledge' },
+  { icon: Key, label: 'Password Vault', desc: 'Auto-generate & store securely' },
+  { icon: FileText, label: 'Secure Notes', desc: 'Encrypted end-to-end' },
+  { icon: Sparkles, label: 'AI Agent', desc: 'Groq-powered vault assistant' },
+];
 
 export default function LandingPage() {
   const router = useRouter();
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'radial-gradient(ellipse at top, rgba(99,102,241,0.08) 0%, var(--bg-primary) 60%)',
-      padding: '24px',
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      {/* Background grid */}
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        backgroundImage: `
-          linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '60px 60px',
-        pointerEvents: 'none',
+    <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-bg-primary">
+      {/* Background effects */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.06)_0%,transparent_50%)]" />
+      <div className="absolute inset-0" style={{
+        backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0)',
+        backgroundSize: '40px 40px',
       }} />
 
-      {/* Floating orbs */}
-      <div style={{
-        position: 'absolute',
-        top: '10%',
-        left: '15%',
-        width: '300px',
-        height: '300px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)',
-        filter: 'blur(40px)',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute',
-        bottom: '10%',
-        right: '10%',
-        width: '250px',
-        height: '250px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(192,132,252,0.05) 0%, transparent 70%)',
-        filter: 'blur(40px)',
-        pointerEvents: 'none',
-      }} />
+      {/* Animated orbs */}
+      <motion.div
+        className="absolute top-[15%] left-[10%] w-[300px] h-[300px] rounded-full opacity-30"
+        style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.08), transparent 70%)', filter: 'blur(60px)' }}
+        animate={{ y: [0, -20, 0], x: [0, 10, 0] }}
+        transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute bottom-[15%] right-[10%] w-[250px] h-[250px] rounded-full opacity-30"
+        style={{ background: 'radial-gradient(circle, rgba(6,182,212,0.06), transparent 70%)', filter: 'blur(60px)' }}
+        animate={{ y: [0, 15, 0], x: [0, -10, 0] }}
+        transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+      />
 
-      {/* Logo */}
-      <div className="animate-fade-in" style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '14px',
-        marginBottom: '48px',
-        position: 'relative',
-        zIndex: 1,
-      }}>
-        <div style={{
-          width: '56px',
-          height: '56px',
-          borderRadius: '16px',
-          background: 'linear-gradient(135deg, var(--accent-primary), #8b5cf6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 0 40px rgba(99,102,241,0.3)',
-        }}>
-          <Shield size={28} color="white" />
-        </div>
-        <div>
-          <h1 style={{ fontSize: '32px', fontWeight: 700, letterSpacing: '-0.02em' }}>Citadel</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>Private Vault</p>
-        </div>
-      </div>
+      {/* Content */}
+      <div className="relative z-10 flex flex-col items-center px-6 max-w-2xl text-center">
 
-      {/* Tagline */}
-      <div className="animate-fade-in" style={{ animationDelay: '0.1s', textAlign: 'center', position: 'relative', zIndex: 1, maxWidth: '520px' }}>
-        <h2 style={{
-          fontSize: '42px',
-          fontWeight: 800,
-          lineHeight: 1.15,
-          letterSpacing: '-0.03em',
-          marginBottom: '16px',
-        }}>
+        {/* Logo */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="flex items-center gap-3.5 mb-12"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-accent to-accent-cyan flex items-center justify-center shadow-lg shadow-accent/20">
+            <Shield size={28} className="text-white" />
+          </div>
+          <div className="text-left">
+            <h1 className="text-3xl font-bold tracking-tight">Citadel</h1>
+            <p className="text-xs text-text-muted tracking-wider uppercase">Private Vault</p>
+          </div>
+        </motion.div>
+
+        {/* Headline */}
+        <motion.h2
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="text-5xl sm:text-6xl font-extrabold leading-[1.1] tracking-tight mb-5"
+        >
           Your fortress for
           <br />
           <span className="gradient-text">everything private</span>
-        </h2>
-        <p style={{ fontSize: '16px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+        </motion.h2>
+
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="text-base sm:text-lg text-text-secondary leading-relaxed max-w-md"
+        >
           Zero-knowledge encrypted vault for passwords, notes, and files.
-          Access anywhere. AI-powered. Only you hold the key.
-        </p>
-      </div>
+          AI-powered. Only you hold the key.
+        </motion.p>
 
-      {/* Feature pills */}
-      <div className="animate-fade-in" style={{
-        animationDelay: '0.2s',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '10px',
-        justifyContent: 'center',
-        marginTop: '32px',
-        position: 'relative',
-        zIndex: 1,
-      }}>
-        {[
-          { icon: Lock, label: 'AES-256 Encrypted' },
-          { icon: Key, label: 'Password Vault' },
-          { icon: FileText, label: 'Secure Notes' },
-          { icon: Sparkles, label: 'AI Agent' },
-        ].map(({ icon: Icon, label }) => (
-          <div key={label} style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            borderRadius: 'var(--radius-full)',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-primary)',
-            fontSize: '13px',
-            color: 'var(--text-secondary)',
-          }}>
-            <Icon size={14} style={{ color: 'var(--accent-secondary)' }} />
-            {label}
-          </div>
-        ))}
-      </div>
-
-      {/* CTA */}
-      <div className="animate-fade-in" style={{
-        animationDelay: '0.3s',
-        display: 'flex',
-        gap: '12px',
-        marginTop: '40px',
-        position: 'relative',
-        zIndex: 1,
-      }}>
-        <button
-          onClick={() => router.push('/auth')}
-          className="btn-primary"
-          style={{
-            padding: '14px 32px',
-            fontSize: '15px',
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: '0 0 30px rgba(99,102,241,0.25)',
-          }}
+        {/* Feature pills */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="flex flex-wrap justify-center gap-3 mt-10"
         >
-          Get Started
-        </button>
-        <button
-          onClick={() => router.push('/auth')}
-          className="btn-secondary"
-          style={{
-            padding: '14px 32px',
-            fontSize: '15px',
-            borderRadius: 'var(--radius-lg)',
-          }}
-        >
-          Sign In
-        </button>
-      </div>
+          {features.map(({ icon: Icon, label }, i) => (
+            <motion.div
+              key={label}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.4 + i * 0.08 }}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-bg-secondary border border-border-primary text-sm text-text-secondary hover:border-accent/30 hover:text-text-primary transition-all duration-300 cursor-default"
+            >
+              <Icon size={14} className="text-accent" />
+              {label}
+            </motion.div>
+          ))}
+        </motion.div>
 
-      {/* Footer */}
-      <p className="animate-fade-in" style={{
-        animationDelay: '0.4s',
-        marginTop: '64px',
-        fontSize: '12px',
-        color: 'var(--text-muted)',
-        position: 'relative',
-        zIndex: 1,
-      }}>
-        End-to-end encrypted • Open source • Self-hosted on Vercel
-      </p>
+        {/* CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
+          className="flex gap-3 mt-12"
+        >
+          <Button size="lg" onClick={() => router.push('/auth')} className="group px-8">
+            Get Started
+            <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+          </Button>
+          <Button variant="outline" size="lg" onClick={() => router.push('/auth')}>
+            Sign In
+          </Button>
+        </motion.div>
+
+        {/* Footer */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7 }}
+          className="mt-16 text-xs text-text-muted flex items-center gap-2"
+        >
+          <Zap size={12} className="text-accent" />
+          End-to-end encrypted • Open source • Self-hosted on Vercel
+        </motion.p>
+      </div>
     </div>
   );
 }

@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { useVault } from '@/contexts/VaultContext';
 import { createClient } from '@/lib/supabase/client';
 import { hashMasterPassword, generateSalt } from '@/lib/crypto';
-import { Shield, Lock, Eye, EyeOff, ArrowRight, AlertTriangle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Shield, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 export default function MasterPasswordModal() {
   const { unlock } = useVault();
@@ -12,235 +16,180 @@ export default function MasterPasswordModal() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [isFirstTime, setIsFirstTime] = useState<boolean | null>(null);
-  const [checked, setChecked] = useState(false);
+  const [error, setError] = useState('');
 
-  const checkIfFirstTime = async () => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data } = await supabase
-      .from('user_settings')
-      .select('master_password_hash')
-      .eq('user_id', user.id)
-      .single();
-
-    setIsFirstTime(!data?.master_password_hash);
-    setChecked(true);
-  };
-
-  // Check on mount
-  if (!checked) {
-    checkIfFirstTime();
-  }
-
-  const handleSetup = async () => {
-    if (password.length < 8) {
-      setError('Master password must be at least 8 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
+  // Check if user has a master password set
+  useState(() => {
+    const check = async () => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) return;
 
-      const salt = generateSalt();
-      const saltBytes = Uint8Array.from(atob(salt), c => c.charCodeAt(0));
-      const hash = await hashMasterPassword(password, saltBytes);
-
-      await supabase.from('user_settings').upsert({
-        user_id: user.id,
-        master_password_hash: hash,
-        salt,
-      });
-
-      unlock(password);
-    } catch (err: Error | unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-
-    setLoading(false);
-  };
-
-  const handleUnlock = async () => {
-    if (!password) return;
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: settings } = await supabase
+      const { data } = await supabase
         .from('user_settings')
-        .select('master_password_hash, salt')
+        .select('master_password_hash')
         .eq('user_id', user.id)
         .single();
 
-      if (!settings) throw new Error('No settings found');
+      setIsFirstTime(!data?.master_password_hash);
+    };
+    check();
+  });
 
-      const saltBytes = Uint8Array.from(atob(settings.salt), c => c.charCodeAt(0));
-      const hash = await hashMasterPassword(password, saltBytes);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-      if (hash !== settings.master_password_hash) {
-        setError('Incorrect master password');
-        setLoading(false);
-        return;
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      if (isFirstTime) {
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setLoading(false);
+          return;
+        }
+        if (password.length < 8) {
+          setError('Master password must be at least 8 characters');
+          setLoading(false);
+          return;
+        }
+
+        const salt = generateSalt();
+        const saltBytes = new Uint8Array(
+          atob(salt).split('').map((c) => c.charCodeAt(0))
+        );
+        const hash = await hashMasterPassword(password, saltBytes);
+
+        await supabase.from('user_settings').upsert({
+          user_id: user.id,
+          master_password_hash: hash,
+          salt,
+        });
+
+        unlock(password);
+        toast.success('Master password created! Your vault is now secured.');
+      } else {
+        const { data: settings } = await supabase
+          .from('user_settings')
+          .select('master_password_hash, salt')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!settings) throw new Error('Settings not found');
+
+        const saltBytes = new Uint8Array(
+          atob(settings.salt).split('').map((c: string) => c.charCodeAt(0))
+        );
+        const hash = await hashMasterPassword(password, saltBytes);
+
+        if (hash !== settings.master_password_hash) {
+          setError('Incorrect master password');
+          setLoading(false);
+          return;
+        }
+
+        unlock(password);
+        toast.success('Vault unlocked');
       }
-
-      unlock(password);
-    } catch (err: Error | unknown) {
+    } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     }
 
     setLoading(false);
   };
 
-  if (!checked) {
+  if (isFirstTime === null) {
     return (
-      <div className="overlay">
-        <div style={{ textAlign: 'center' }}>
-          <div className="skeleton" style={{ width: 200, height: 20, margin: '0 auto' }} />
-        </div>
+      <div className="fixed inset-0 flex items-center justify-center bg-bg-primary z-50">
+        <Loader2 size={24} className="animate-spin text-accent" />
       </div>
     );
   }
 
   return (
-    <div className="overlay">
-      <div className="animate-scale-in" style={{
-        width: '100%',
-        maxWidth: '400px',
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border-primary)',
-        borderRadius: 'var(--radius-xl)',
-        padding: '36px',
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
-      }}>
-        {/* Icon */}
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '18px',
-            background: 'linear-gradient(135deg, var(--accent-primary), #8b5cf6)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '16px',
-            boxShadow: '0 0 40px rgba(99,102,241,0.3)',
-          }}>
-            {isFirstTime ? <Shield size={30} color="white" /> : <Lock size={28} color="white" />}
-          </div>
-          <h2 style={{ fontSize: '20px', fontWeight: 700 }}>
-            {isFirstTime ? 'Set Your Master Password' : 'Unlock Vault'}
+    <div className="fixed inset-0 flex items-center justify-center bg-bg-primary z-50">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.04)_0%,transparent_60%)]" />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+        className="relative z-10 w-full max-w-sm mx-6"
+      >
+        <div className="rounded-2xl border border-border-secondary bg-bg-card p-8 shadow-2xl shadow-black/50">
+          {/* Lock icon */}
+          <motion.div
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-accent-cyan flex items-center justify-center mx-auto mb-6 shadow-lg shadow-accent/20"
+          >
+            <Lock size={28} className="text-white" />
+          </motion.div>
+
+          <h2 className="text-xl font-bold text-center mb-1">
+            {isFirstTime ? 'Create Master Password' : 'Unlock Vault'}
           </h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '6px' }}>
+          <p className="text-sm text-text-muted text-center mb-6">
             {isFirstTime
-              ? 'This password encrypts all your data. It cannot be recovered if lost.'
-              : 'Enter your master password to decrypt your vault'}
+              ? 'This password encrypts all your vault data. It cannot be recovered.'
+              : 'Enter your master password to access your vault.'}
           </p>
-        </div>
 
-        {/* Warning for first time */}
-        {isFirstTime && (
-          <div style={{
-            display: 'flex',
-            gap: '10px',
-            padding: '12px',
-            borderRadius: 'var(--radius)',
-            background: 'rgba(234,179,8,0.08)',
-            border: '1px solid rgba(234,179,8,0.15)',
-            marginBottom: '20px',
-            fontSize: '12px',
-            color: 'var(--warning)',
-          }}>
-            <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
-            <span>If you forget this password, your data <strong>cannot</strong> be recovered. Write it down somewhere safe.</span>
-          </div>
-        )}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Master password"
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+              >
+                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
 
-        {/* Password input */}
-        <div style={{ marginBottom: isFirstTime ? '12px' : '20px' }}>
-          <div style={{ position: 'relative' }}>
-            <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Master password"
-              autoFocus
-              className="input-base"
-              style={{ paddingLeft: '38px', paddingRight: '42px' }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isFirstTime) handleUnlock();
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px',
-              }}
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
+            {isFirstTime && (
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm master password"
+                required
+              />
+            )}
 
-        {/* Confirm password (first time only) */}
-        {isFirstTime && (
-          <div style={{ marginBottom: '20px' }}>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm master password"
-              className="input-base"
-              style={{ paddingLeft: '14px' }}
-            />
-          </div>
-        )}
+            {error && (
+              <p className="text-xs text-danger bg-danger/5 border border-danger/10 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
 
-        {/* Error */}
-        {error && (
-          <div style={{
-            padding: '10px 14px', borderRadius: 'var(--radius)', marginBottom: '16px',
-            background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
-            color: 'var(--danger)', fontSize: '13px',
-          }}>
-            {error}
-          </div>
-        )}
+            <Button type="submit" disabled={loading} className="mt-1">
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              {isFirstTime ? 'Create & Unlock' : 'Unlock'}
+            </Button>
+          </form>
 
-        {/* Submit */}
-        <button
-          onClick={isFirstTime ? handleSetup : handleUnlock}
-          disabled={loading || !password}
-          className="btn-primary"
-          style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius)' }}
-        >
-          {loading ? 'Processing...' : (
-            <>
-              {isFirstTime ? 'Set Master Password' : 'Unlock'}
-              <ArrowRight size={16} />
-            </>
+          {isFirstTime && (
+            <p className="text-[11px] text-text-muted text-center mt-4 flex items-center justify-center gap-1.5">
+              <Shield size={10} />
+              Zero-knowledge — we never see your password
+            </p>
           )}
-        </button>
-      </div>
+        </div>
+      </motion.div>
     </div>
   );
 }

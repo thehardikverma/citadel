@@ -6,20 +6,14 @@ import { createClient } from '@/lib/supabase/client';
 import { VaultProvider, useVault } from '@/contexts/VaultContext';
 import MasterPasswordModal from '@/components/MasterPasswordModal';
 import AgentChat from '@/components/AgentChat';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard,
-  Key,
-  FileText,
-  FolderOpen,
-  Settings,
-  Shield,
-  LogOut,
-  Search,
-  Lock,
-  Sparkles,
-  Menu,
-  X,
+  LayoutDashboard, Key, FileText, FolderOpen, Settings,
+  Shield, LogOut, Lock, Sparkles, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
@@ -33,9 +27,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const { isUnlocked, lock } = useVault();
   const router = useRouter();
   const pathname = usePathname();
-  const [showMobile, setShowMobile] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [showAgent, setShowAgent] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
@@ -59,237 +52,182 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     return <MasterPasswordModal />;
   }
 
+  const sidebarWidth = collapsed ? 72 : 240;
+
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Sidebar */}
-      <aside style={{
-        width: '260px',
-        background: 'var(--bg-secondary)',
-        borderRight: '1px solid var(--border-primary)',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-        position: 'relative',
-        zIndex: 10,
-      }}
-        className="sidebar-desktop"
-      >
-        {/* Logo */}
-        <div style={{
-          padding: '20px 20px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          borderBottom: '1px solid var(--border-primary)',
-        }}>
-          <div style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, var(--accent-primary), #8b5cf6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <Shield size={20} color="white" />
+    <TooltipProvider delayDuration={0}>
+      <div className="flex h-screen overflow-hidden bg-bg-primary">
+        {/* Sidebar */}
+        <motion.aside
+          animate={{ width: sidebarWidth }}
+          transition={{ duration: 0.2, ease: 'easeInOut' }}
+          className="flex flex-col border-r border-border-primary bg-bg-secondary flex-shrink-0 relative z-10"
+        >
+          {/* Logo */}
+          <div className={`flex items-center gap-3 p-4 border-b border-border-primary ${collapsed ? 'justify-center' : ''}`}>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-accent-cyan flex items-center justify-center flex-shrink-0">
+              <Shield size={18} className="text-white" />
+            </div>
+            {!collapsed && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <div className="text-sm font-semibold">Citadel</div>
+                <div className="text-[10px] text-text-muted">Encrypted Vault</div>
+              </motion.div>
+            )}
           </div>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '15px' }}>Citadel</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Encrypted Vault</div>
-          </div>
-        </div>
 
-        {/* Navigation */}
-        <nav style={{ flex: 1, padding: '12px', overflow: 'auto' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {navItems.map((item) => {
-              const isActive = activeSection === item.id;
-              return (
+          {/* Nav */}
+          <nav className="flex-1 p-2 overflow-auto">
+            <div className="flex flex-col gap-1">
+              {navItems.map((item) => {
+                const isActive = activeSection === item.id;
+                const btn = (
+                  <button
+                    key={item.id}
+                    onClick={() => router.push(item.href)}
+                    className={`relative flex items-center gap-2.5 rounded-lg transition-all duration-200 cursor-pointer ${
+                      collapsed ? 'justify-center p-2.5' : 'px-3 py-2.5'
+                    } ${
+                      isActive
+                        ? 'bg-accent/10 text-accent'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeNav"
+                        className="absolute inset-0 rounded-lg bg-accent/10 border border-accent/20"
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                      />
+                    )}
+                    <item.icon size={18} className="relative z-10 flex-shrink-0" />
+                    {!collapsed && (
+                      <span className="relative z-10 text-[13px] font-medium">{item.label}</span>
+                    )}
+                  </button>
+                );
+
+                if (collapsed) {
+                  return (
+                    <Tooltip key={item.id}>
+                      <TooltipTrigger asChild>{btn}</TooltipTrigger>
+                      <TooltipContent side="right">{item.label}</TooltipContent>
+                    </Tooltip>
+                  );
+                }
+                return btn;
+              })}
+            </div>
+          </nav>
+
+          {/* Collapse toggle */}
+          <div className="p-2 border-t border-border-primary">
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-all text-xs cursor-pointer"
+            >
+              {collapsed ? <ChevronRight size={14} /> : <><ChevronLeft size={14} /> <span>Collapse</span></>}
+            </button>
+          </div>
+
+          {/* Bottom actions */}
+          <div className="p-2 border-t border-border-primary flex flex-col gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <button
-                  key={item.id}
-                  onClick={() => { router.push(item.href); setShowMobile(false); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius)',
-                    border: 'none',
-                    background: isActive ? 'var(--accent-glow)' : 'transparent',
-                    color: isActive ? 'var(--accent-secondary)' : 'var(--text-secondary)',
-                    fontSize: '13px',
-                    fontWeight: isActive ? 600 : 400,
-                    cursor: 'pointer',
-                    width: '100%',
-                    textAlign: 'left',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.background = 'var(--bg-tertiary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.background = 'transparent';
-                  }}
+                  onClick={() => lock()}
+                  className={`flex items-center gap-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-all cursor-pointer ${collapsed ? 'justify-center p-2.5' : 'px-3 py-2'}`}
                 >
-                  <item.icon size={18} />
-                  {item.label}
+                  <Lock size={15} />
+                  {!collapsed && <span className="text-xs">Lock Vault</span>}
                 </button>
-              );
-            })}
+              </TooltipTrigger>
+              {collapsed && <TooltipContent side="right">Lock Vault</TooltipContent>}
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleSignOut}
+                  className={`flex items-center gap-2 rounded-lg text-danger/70 hover:text-danger hover:bg-danger/5 transition-all cursor-pointer ${collapsed ? 'justify-center p-2.5' : 'px-3 py-2'}`}
+                >
+                  <LogOut size={15} />
+                  {!collapsed && <span className="text-xs">Sign Out</span>}
+                </button>
+              </TooltipTrigger>
+              {collapsed && <TooltipContent side="right">Sign Out</TooltipContent>}
+            </Tooltip>
           </div>
-        </nav>
 
-        {/* Bottom actions */}
-        <div style={{
-          padding: '12px',
-          borderTop: '1px solid var(--border-primary)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-        }}>
-          <button
-            onClick={() => lock()}
-            className="btn-ghost"
-            style={{ justifyContent: 'flex-start', width: '100%', fontSize: '13px', padding: '10px 12px' }}
-          >
-            <Lock size={16} />
-            Lock Vault
-          </button>
-          <button
-            onClick={handleSignOut}
-            className="btn-ghost"
-            style={{ justifyContent: 'flex-start', width: '100%', fontSize: '13px', padding: '10px 12px', color: 'var(--danger)' }}
-          >
-            <LogOut size={16} />
-            Sign Out
-          </button>
-        </div>
-
-        {/* User */}
-        <div style={{
-          padding: '14px 16px',
-          borderTop: '1px solid var(--border-primary)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-        }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, var(--accent-primary), #c084fc)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '13px',
-            fontWeight: 600,
-            flexShrink: 0,
-          }}>
-            {userEmail ? userEmail[0].toUpperCase() : 'U'}
-          </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: '12px', fontWeight: 500, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-              {userEmail || 'Loading...'}
+          {/* User */}
+          <div className={`p-3 border-t border-border-primary flex items-center gap-2.5 ${collapsed ? 'justify-center' : ''}`}>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent/80 to-accent-cyan/80 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+              {userEmail ? userEmail[0].toUpperCase() : 'U'}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Free Plan</div>
+            {!collapsed && (
+              <div className="overflow-hidden">
+                <div className="text-xs font-medium truncate">{userEmail || 'Loading...'}</div>
+                <div className="text-[10px] text-text-muted">Free Plan</div>
+              </div>
+            )}
           </div>
-        </div>
-      </aside>
+        </motion.aside>
 
-      {/* Main content area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Top bar */}
-        <header style={{
-          height: '60px',
-          borderBottom: '1px solid var(--border-primary)',
-          padding: '0 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: 'var(--bg-secondary)',
-          flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            {/* Mobile menu toggle */}
-            <button
-              onClick={() => setShowMobile(!showMobile)}
-              className="btn-ghost"
-              style={{ display: 'none', padding: '6px' }}
-              id="mobile-menu-btn"
-            >
-              <Menu size={20} />
-            </button>
-            <h1 style={{ fontSize: '18px', fontWeight: 600, textTransform: 'capitalize' }}>
-              {activeSection === 'dashboard' ? 'Dashboard' : activeSection}
-            </h1>
-            <span className="badge badge-accent" style={{ fontSize: '10px' }}>
-              <Lock size={10} style={{ marginRight: '4px' }} />
-              Encrypted
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Search */}
-            <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search vault... (Ctrl+K)"
-                className="input-base"
-                style={{
-                  width: '260px',
-                  paddingLeft: '32px',
-                  fontSize: '13px',
-                  padding: '8px 12px 8px 32px',
-                  background: 'var(--bg-primary)',
-                }}
-              />
+        {/* Main content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Top bar */}
+          <header className="h-14 border-b border-border-primary px-6 flex items-center justify-between bg-bg-secondary/50 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <h1 className="text-base font-semibold capitalize">{activeSection}</h1>
+              <Badge variant="default" className="text-[10px]">
+                <Lock size={8} className="mr-0.5" /> Encrypted
+              </Badge>
             </div>
 
-            {/* AI Agent button */}
-            <button
-              onClick={() => setShowAgent(!showAgent)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: 'var(--radius)',
-                border: '1px solid rgba(99,102,241,0.2)',
-                background: showAgent ? 'var(--accent-glow)' : 'transparent',
-                color: showAgent ? 'var(--accent-secondary)' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 500,
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <Sparkles size={14} />
-              AI Agent
-            </button>
-          </div>
-        </header>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={showAgent ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowAgent(!showAgent)}
+                className="text-xs"
+              >
+                <Sparkles size={13} />
+                AI Agent
+              </Button>
+            </div>
+          </header>
 
-        {/* Page content */}
-        <main style={{ flex: 1, overflow: 'auto', padding: '24px', position: 'relative' }}>
-          {children}
-        </main>
+          {/* Page content */}
+          <main className="flex-1 overflow-auto p-6 relative">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </main>
+        </div>
+
+        {/* Agent panel */}
+        <AnimatePresence>
+          {showAgent && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 380, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="border-l border-border-primary bg-bg-secondary overflow-hidden flex-shrink-0"
+            >
+              <AgentChat onClose={() => setShowAgent(false)} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      {/* Agent chat panel */}
-      {showAgent && <AgentChat onClose={() => setShowAgent(false)} />}
-
-      {/* Mobile sidebar overlay */}
-      <style>{`
-        @media (max-width: 768px) {
-          .sidebar-desktop { display: none !important; }
-          #mobile-menu-btn { display: flex !important; }
-        }
-      `}</style>
-    </div>
+    </TooltipProvider>
   );
 }
 
